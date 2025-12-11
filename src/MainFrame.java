@@ -2,7 +2,8 @@
 /**
  *
  * @author Pearly Jaleco
- */ 
+ */
+import customlang.LanguageRunner;
 import javax.swing.*;
 import javax.swing.tree.*;
 import javax.swing.undo.UndoManager;
@@ -18,7 +19,7 @@ public class MainFrame extends JFrame {
     private File projectDirectory = new File("project");
     private File currentFile = null;
     private UndoManager undoManager = new UndoManager();
-    
+    private LanguageRunner runner = new LanguageRunner();
     //CONSTRUCTOR 
     public MainFrame() {
         try {
@@ -30,6 +31,21 @@ public class MainFrame extends JFrame {
         setupComponents();
     }
     
+    public class MyIDE implements LanguageRunner.IOCallback {
+    private JTextArea console;
+
+    public MyIDE(JTextArea area) {
+        this.console = area;
+    }
+    @Override
+    public String input(String prompt) {
+        return JOptionPane.showInputDialog(MainFrame.this, prompt);
+    }
+    @Override
+    public void print(String text) {
+        console.append(text + "\n");
+    }
+}
     private void setupComponents() {
         // Setup undo manager
         Document doc = CodeEditorTextArea.getDocument();
@@ -48,7 +64,9 @@ public class MainFrame extends JFrame {
         refreshTree();
         jTree1.setRootVisible(false);
   
-
+         // Set up the IO callback for the interpreter
+          MyIDE ideIO = new MyIDE(OutputTextArea);
+          runner.setIOCallback(ideIO);
     
     // DETECTS WHEN NODE IS SELECTED 
         // Detects when user clicks on a file in the tree node 
@@ -541,7 +559,6 @@ public class MainFrame extends JFrame {
         jScrollPane2.setBackground(new java.awt.Color(182, 150, 82));
         jScrollPane2.setBorder(null);
 
-        OutputTextArea.setEditable(false);
         OutputTextArea.setBackground(new java.awt.Color(186, 162, 123));
         OutputTextArea.setColumns(20);
         OutputTextArea.setRows(5);
@@ -606,7 +623,24 @@ public class MainFrame extends JFrame {
     }//GEN-LAST:event_BtnSETTINGSActionPerformed
 
     private void BtnRUNActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_BtnRUNActionPerformed
-        
+    String sourceCode = CodeEditorTextArea.getText();
+    OutputTextArea.setText(""); 
+    OutputTextArea.append("Running...\n\n");
+
+    new Thread(() -> {
+        boolean success = runner.run(sourceCode, text -> {
+            // All output goes to OutputTextArea
+            SwingUtilities.invokeLater(() -> OutputTextArea.append(text + "\n"));
+        });
+
+        SwingUtilities.invokeLater(() -> {
+            if (success) {
+                OutputTextArea.append("\n✓ Execution completed successfully\n");
+            } else {
+                OutputTextArea.append("\n✗ Error: " + runner.getLastError() + "\n");
+            }
+        });
+    }).start();  
     }//GEN-LAST:event_BtnRUNActionPerformed
 
     private void NEWFileMenuActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_NEWFileMenuActionPerformed
