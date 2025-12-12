@@ -10,246 +10,258 @@ package customlang;
  * @author Pearly Jaleco
  */
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class Parser {
-    private List<Token> tokens;
-    private int pos;
+    private List<String> tokens;
+    private int pos = 0;
     
-    public Parser(List<Token> tokens) {
+    public Parser(List<String> tokens) {
         this.tokens = tokens;
-        this.pos = 0;
     }
     
-    private Token currentToken() {
+    private String current() {
         if (pos < tokens.size()) {
             return tokens.get(pos);
         }
-        return tokens.get(tokens.size() - 1); // Return EOF
+        return "";
     }
     
-    private Token peekToken(int offset) {
-        int newPos = pos + offset;
-        if (newPos < tokens.size()) {
-            return tokens.get(newPos);
-        }
-        return tokens.get(tokens.size() - 1); // Return EOF
-    }
-    
-    private void advance() {
-        if (pos < tokens.size() - 1) {
-            pos++;
-        }
-    }
-    
-    private Token expect(TokenType type) throws Exception {
-        if (currentToken().getType() != type) {
-            throw new Exception("Expected " + type + ", got " + currentToken().getType() + 
-                              " at line " + currentToken().getLine());
-        }
-        Token token = currentToken();
-        advance();
+    private String next() {
+        String token = current();
+        pos++;
         return token;
     }
     
-    public Program parse() throws Exception {
-        expect(TokenType.BEGIN);
-        List<ASTNode> statements = new ArrayList<>();
+    private void expect(String expected) {
+        String token = next();
+        if (!token.equals(expected)) {
+            throw new RuntimeException("Expected '" + expected + "' but got '" + token + "'");
+        }
+    }
+    
+    public Map<String, Object> parse() {
+        expect("BEGIN");
         
-        while (currentToken().getType() != TokenType.STOP) {
-            if (currentToken().getType() == TokenType.EOF) {
-                throw new Exception("Expected STOP before end of file");
-            }
+        List<Map<String, Object>> statements = new ArrayList<>();
+        
+        while (!current().equals("STOP")) {
             statements.add(parseStatement());
         }
         
-        expect(TokenType.STOP);
-        return new Program(statements);
+        expect("STOP");
+        
+        Map<String, Object> program = new HashMap<>();
+        program.put("type", "Program");
+        program.put("statements", statements);
+        
+        return program;
     }
     
-    private ASTNode parseStatement() throws Exception {
-        Token token = currentToken();
+    private Map<String, Object> parseStatement() {
+        String token = current();
         
-        switch (token.getType()) {
-            case THIS:
-                return parseVarDeclaration();
-            case IDENTIFIER:
-                return parseAssignment();
-            case GIVE:
-                return parseInput();
-            case PRESENT:
-                return parsePrint();
-            case IF:
-                return parseIf();
-            default:
-                throw new Exception("Unexpected token " + token.getType() + " at line " + token.getLine());
-        }
-    }
-    
-    private VarDeclaration parseVarDeclaration() throws Exception {
-        expect(TokenType.THIS);
-        String name = (String) expect(TokenType.IDENTIFIER).getValue();
-        expect(TokenType.AS);
-        
-        Token typeToken = currentToken();
-        if (typeToken.getType() != TokenType.NT && typeToken.getType() != TokenType.FT &&
-            typeToken.getType() != TokenType.CH && typeToken.getType() != TokenType.ST) {
-            throw new Exception("Expected type (NT, FT, CH, ST) at line " + typeToken.getLine());
+        if (token.equals("THIS")) {
+            return parseVarDeclaration();
+        } else if (token.equals("PRESENT")) {
+            return parsePrint();
+        } else if (token.equals("GIVE")) {
+            return parseInput();
+        } else if (token.equals("IF")) {
+            return parseIf();
+        } else if (isIdentifier(token)) {
+            return parseAssignment();
         }
         
-        String varType = (String) typeToken.getValue();
-        advance();
-        return new VarDeclaration(name, varType);
+        throw new RuntimeException("Unexpected token: " + token);
     }
     
-    private Assignment parseAssignment() throws Exception {
-        String name = (String) expect(TokenType.IDENTIFIER).getValue();
-        expect(TokenType.ASSIGN);
-        ASTNode expression = parseExpression();
-        return new Assignment(name, expression);
-    }
-    
-    private InputStmt parseInput() throws Exception {
-        expect(TokenType.GIVE);
-        String prompt = (String) expect(TokenType.STRING).getValue();
-        expect(TokenType.GET);
-        String varName = (String) expect(TokenType.IDENTIFIER).getValue();
-        return new InputStmt(prompt, varName);
-    }
-    
-    private PrintStmt parsePrint() throws Exception {
-        expect(TokenType.PRESENT);
+    private Map<String, Object> parseVarDeclaration() {
+        expect("THIS");
+        String name = next();
+        expect("AS");
+        String type = next();
         
-        ASTNode value;
-        if (currentToken().getType() == TokenType.STRING) {
-            value = new StringNode((String) currentToken().getValue());
-            advance();
-        } else if (currentToken().getType() == TokenType.IDENTIFIER) {
-            value = new Identifier((String) currentToken().getValue());
-            advance();
+        Map<String, Object> node = new HashMap<>();
+        node.put("type", "VarDeclaration");
+        node.put("name", name);
+        node.put("varType", type);
+        
+        return node;
+    }
+    
+    private Map<String, Object> parseAssignment() {
+        String name = next();
+        expect(">>");
+        Map<String, Object> value = parseExpression();
+        
+        Map<String, Object> node = new HashMap<>();
+        node.put("type", "Assignment");
+        node.put("name", name);
+        node.put("value", value);
+        
+        return node;
+    }
+    
+    private Map<String, Object> parsePrint() {
+        expect("PRESENT");
+        Map<String, Object> value;
+        
+        if (current().startsWith("\"")) {
+            String str = next();
+            value = new HashMap<>();
+            value.put("type", "String");
+            value.put("value", str.substring(1, str.length() - 1));
         } else {
             value = parseExpression();
         }
         
-        return new PrintStmt(value);
+        Map<String, Object> node = new HashMap<>();
+        node.put("type", "Print");
+        node.put("value", value);
+        
+        return node;
     }
     
-    private IfStmt parseIf() throws Exception {
-        expect(TokenType.IF);
+    private Map<String, Object> parseInput() {
+        expect("GIVE");
+        String prompt = next();
+        expect("GET");
+        String varName = next();
         
-        List<ASTNode> conditions = new ArrayList<>();
-        List<List<ASTNode>> thenBlocks = new ArrayList<>();
+        Map<String, Object> node = new HashMap<>();
+        node.put("type", "Input");
+        node.put("prompt", prompt.substring(1, prompt.length() - 1));
+        node.put("varName", varName);
         
-        // First IF condition
-        expect(TokenType.LPAREN);
-        ASTNode condition = parseCondition();
-        expect(TokenType.RPAREN);
-        expect(TokenType.THEN);
+        return node;
+    }
+    
+    private Map<String, Object> parseIf() {
+        expect("IF");
+        expect("(");
+        Map<String, Object> condition = parseCondition();
+        expect(")");
+        expect("THEN");
         
-        conditions.add(condition);
-        List<ASTNode> thenBlock = new ArrayList<>();
-        
-        while (currentToken().getType() != TokenType.OR_ELSE && 
-               currentToken().getType() != TokenType.OR && 
-               currentToken().getType() != TokenType.STOP) {
+        List<Map<String, Object>> thenBlock = new ArrayList<>();
+        while (!current().equals("OR") && !current().equals("STOP")) {
             thenBlock.add(parseStatement());
         }
         
-        thenBlocks.add(thenBlock);
-        
-        // OR ELSE clauses
-        while (currentToken().getType() == TokenType.OR_ELSE) {
-            advance(); // OR_ELSE
-            expect(TokenType.LPAREN);
-            condition = parseCondition();
-            expect(TokenType.RPAREN);
-            expect(TokenType.THEN);
-            
-            conditions.add(condition);
-            thenBlock = new ArrayList<>();
-            
-            while (currentToken().getType() != TokenType.OR_ELSE && 
-                   currentToken().getType() != TokenType.OR && 
-                   currentToken().getType() != TokenType.STOP) {
-                thenBlock.add(parseStatement());
-            }
-            
-            thenBlocks.add(thenBlock);
-        }
-        
-        // OR (else) clause
-        List<ASTNode> elseBlock = null;
-        if (currentToken().getType() == TokenType.OR) {
-            advance();
+        List<Map<String, Object>> elseBlock = null;
+        if (current().equals("OR")) {
+            next();
             elseBlock = new ArrayList<>();
-            
-            while (currentToken().getType() != TokenType.STOP) {
+            while (!current().equals("STOP")) {
                 elseBlock.add(parseStatement());
             }
         }
         
-        expect(TokenType.STOP);
-        return new IfStmt(conditions, thenBlocks, elseBlock);
+        expect("STOP");
+        
+        Map<String, Object> node = new HashMap<>();
+        node.put("type", "If");
+        node.put("condition", condition);
+        node.put("thenBlock", thenBlock);
+        node.put("elseBlock", elseBlock);
+        
+        return node;
     }
     
-    private Condition parseCondition() throws Exception {
-        ASTNode left = parseExpression();
+    private Map<String, Object> parseCondition() {
+        Map<String, Object> left = parseExpression();
+        String operator = next();
+        Map<String, Object> right = parseExpression();
         
-        String operator = (String) currentToken().getValue();
-        if (currentToken().getType() != TokenType.EQ && currentToken().getType() != TokenType.NEQ &&
-            currentToken().getType() != TokenType.GT && currentToken().getType() != TokenType.LT &&
-            currentToken().getType() != TokenType.GTE && currentToken().getType() != TokenType.LTE) {
-            throw new Exception("Expected relational operator at line " + currentToken().getLine());
-        }
+        Map<String, Object> node = new HashMap<>();
+        node.put("type", "Condition");
+        node.put("left", left);
+        node.put("operator", operator);
+        node.put("right", right);
         
-        advance();
-        ASTNode right = parseExpression();
-        
-        return new Condition(left, operator, right);
+        return node;
     }
     
-    private ASTNode parseExpression() throws Exception {
-        ASTNode left = parseTerm();
+    private Map<String, Object> parseExpression() {
+        Map<String, Object> left = parseTerm();
         
-        while (currentToken().getType() == TokenType.PLUS || currentToken().getType() == TokenType.MINUS) {
-            String operator = (String) currentToken().getValue();
-            advance();
-            ASTNode right = parseTerm();
-            left = new BinaryOp(left, operator, right);
+        while (current().equals("+") || current().equals("-")) {
+            String op = next();
+            Map<String, Object> right = parseTerm();
+            
+            Map<String, Object> node = new HashMap<>();
+            node.put("type", "BinaryOp");
+            node.put("operator", op);
+            node.put("left", left);
+            node.put("right", right);
+            
+            left = node;
         }
         
         return left;
     }
     
-    private ASTNode parseTerm() throws Exception {
-        ASTNode left = parseFactor();
+    private Map<String, Object> parseTerm() {
+        Map<String, Object> left = parseFactor();
         
-        while (currentToken().getType() == TokenType.MULTIPLY || currentToken().getType() == TokenType.DIVIDE) {
-            String operator = (String) currentToken().getValue();
-            advance();
-            ASTNode right = parseFactor();
-            left = new BinaryOp(left, operator, right);
+        while (current().equals("*") || current().equals("/")) {
+            String op = next();
+            Map<String, Object> right = parseFactor();
+            
+            Map<String, Object> node = new HashMap<>();
+            node.put("type", "BinaryOp");
+            node.put("operator", op);
+            node.put("left", left);
+            node.put("right", right);
+            
+            left = node;
         }
         
         return left;
     }
     
-    private ASTNode parseFactor() throws Exception {
-        Token token = currentToken();
+    private Map<String, Object> parseFactor() {
+        String token = current();
         
-        if (token.getType() == TokenType.NUMBER) {
-            advance();
-            return new NumberNode(token.getValue());
-        } else if (token.getType() == TokenType.IDENTIFIER) {
-            advance();
-            return new Identifier((String) token.getValue());
-        } else if (token.getType() == TokenType.LPAREN) {
-            advance();
-            ASTNode expr = parseExpression();
-            expect(TokenType.RPAREN);
+        if (token.equals("(")) {
+            next();
+            Map<String, Object> expr = parseExpression();
+            expect(")");
             return expr;
-        } else {
-            throw new Exception("Unexpected token " + token.getType() + " in expression at line " + token.getLine());
         }
+        
+        if (isNumber(token)) {
+            next();
+            Map<String, Object> node = new HashMap<>();
+            node.put("type", "Number");
+            node.put("value", Double.parseDouble(token));
+            return node;
+        }
+        
+        if (isIdentifier(token)) {
+            next();
+            Map<String, Object> node = new HashMap<>();
+            node.put("type", "Identifier");
+            node.put("name", token);
+            return node;
+        }
+        
+        throw new RuntimeException("Unexpected token: " + token);
+    }
+    
+    private boolean isNumber(String s) {
+        try {
+            Double.parseDouble(s);
+            return true;
+        } catch (NumberFormatException e) {
+            return false;
+        }
+    }
+    
+    private boolean isIdentifier(String s) {
+        return s.length() > 0 && Character.isLetter(s.charAt(0));
     }
 }

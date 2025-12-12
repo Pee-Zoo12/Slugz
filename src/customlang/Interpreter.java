@@ -6,168 +6,196 @@
 package customlang;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class Interpreter {
 
-    private Map<String, Object> variables;
-    private Map<String, String> varTypes;
-    private LanguageRunner.IOCallback io; // IO for input/output
+    private Map<String, Object> variables = new HashMap<>();
+    private IOCallback io;
 
-    public Interpreter() {
-        this.variables = new HashMap<>();
-        this.varTypes = new HashMap<>();
-        this.io = null;
+    // ----------------------
+    // Constructor
+    // ----------------------
+    public Interpreter(IOCallback io) {
+        this.io = io;
     }
 
-    // Setter for IO callback
-    public void setIOCallback(LanguageRunner.IOCallback callback) {
-        this.io = callback;
+    // ----------------------
+    // Inner IOCallback interface
+    // ----------------------
+    public interface IOCallback {
+        void print(String text);
+        String read(String prompt);
     }
 
-    public void execute(ASTNode node) throws Exception {
-        if (node instanceof Program) {
-            executeProgram((Program) node);
-        } else if (node instanceof VarDeclaration) {
-            executeVarDeclaration((VarDeclaration) node);
-        } else if (node instanceof Assignment) {
-            executeAssignment((Assignment) node);
-        } else if (node instanceof InputStmt) {
-            executeInputStmt((InputStmt) node);
-        } else if (node instanceof PrintStmt) {
-            executePrintStmt((PrintStmt) node);
-        } else if (node instanceof IfStmt) {
-            executeIfStmt((IfStmt) node);
-        } else {
-            throw new Exception("Unknown AST node type: " + node.getClass().getName());
-        }
-    }
-
-    private void executeProgram(Program node) throws Exception {
-        for (ASTNode stmt : node.statements) {
+    // ----------------------
+    // Run the program
+    // ----------------------
+    public void run(Map<String, Object> program) {
+        List<Map<String, Object>> statements = (List<Map<String, Object>>) program.get("statements");
+        for (Map<String, Object> stmt : statements) {
             execute(stmt);
         }
     }
 
-    private void executeVarDeclaration(VarDeclaration node) {
-        varTypes.put(node.name, node.varType);
-
-        switch (node.varType) {
-            case "NT": variables.put(node.name, 0); break;
-            case "FT": variables.put(node.name, 0.0); break;
-            case "CH":
-            case "ST": variables.put(node.name, ""); break;
-        }
-    }
-
-    private void executeAssignment(Assignment node) throws Exception {
-        if (!variables.containsKey(node.name)) {
-            throw new Exception("Variable '" + node.name + "' not declared");
-        }
-
-        Object value = evaluate(node.expression);
-        String type = varTypes.get(node.name);
+    // ----------------------
+    // Execute a statement
+    // ----------------------
+    private void execute(Map<String, Object> node) {
+        String type = (String) node.get("type");
 
         switch (type) {
-            case "NT": variables.put(node.name, ((Number) value).intValue()); break;
-            case "FT": variables.put(node.name, ((Number) value).doubleValue()); break;
-            case "CH":
-            case "ST": variables.put(node.name, value.toString()); break;
+            case "VarDeclaration":
+                executeVarDeclaration(node);
+                break;
+            case "Assignment":
+                executeAssignment(node);
+                break;
+            case "Print":
+                executePrint(node);
+                break;
+            case "Input":
+                executeInput(node);
+                break;
+            case "If":
+                executeIf(node);
+                break;
+            default:
+                throw new RuntimeException("Unknown statement type: " + type);
         }
     }
 
-    private void executeInputStmt(InputStmt node) throws Exception {
-        if (!variables.containsKey(node.varName)) {
-            throw new Exception("Variable '" + node.varName + "' not declared");
-        }
+    private void executeVarDeclaration(Map<String, Object> node) {
+        String name = (String) node.get("name");
+        variables.put(name, 0);
+    }
 
-        if (io == null) throw new Exception("IOCallback not set for input.");
+    private void executeAssignment(Map<String, Object> node) {
+        String name = (String) node.get("name");
+        Map<String, Object> valueNode = (Map<String, Object>) node.get("value");
+        Object value = evaluate(valueNode);
+        variables.put(name, value);
+    }
 
-        String inputValue = io.input(node.prompt); // prompt user
-        String type = varTypes.get(node.varName);
+    private void executePrint(Map<String, Object> node) {
+    Map<String, Object> valueNode = (Map<String, Object>) node.get("value");
+    Object value = evaluate(valueNode);
+    if (value instanceof Double && ((Double) value) % 1 == 0) {
+        value = ((Double) value).intValue();
+    }
 
-        switch (type) {
-            case "NT": variables.put(node.varName, Integer.parseInt(inputValue)); break;
-            case "FT": variables.put(node.varName, Double.parseDouble(inputValue)); break;
-            case "CH":
-            case "ST": variables.put(node.varName, inputValue); break;
+    io.print(value.toString());
+}
+
+
+    private void executeInput(Map<String, Object> node) {
+        String prompt = (String) node.get("prompt");
+        String varName = (String) node.get("varName");
+
+        String input = io.read(prompt);
+
+        try {
+            variables.put(varName, Double.parseDouble(input));
+        } catch (NumberFormatException e) {
+            variables.put(varName, input);
         }
     }
 
-    private void executePrintStmt(PrintStmt node) throws Exception {
-        Object value = evaluate(node.value);
+    private void executeIf(Map<String, Object> node) {
+        Map<String, Object> condition = (Map<String, Object>) node.get("condition");
+        boolean result = evaluateCondition(condition);
 
-        if (io != null) {
-            io.print(value.toString()); // print output only via IOCallback
-        }
-    }
-
-    private void executeIfStmt(IfStmt node) throws Exception {
-        for (int i = 0; i < node.conditions.size(); i++) {
-            if (evaluateCondition((Condition) node.conditions.get(i))) {
-                for (ASTNode stmt : node.thenBlocks.get(i)) {
+        if (result) {
+            List<Map<String, Object>> thenBlock = (List<Map<String, Object>>) node.get("thenBlock");
+            for (Map<String, Object> stmt : thenBlock) {
+                execute(stmt);
+            }
+        } else {
+            List<Map<String, Object>> elseBlock = (List<Map<String, Object>>) node.get("elseBlock");
+            if (elseBlock != null) {
+                for (Map<String, Object> stmt : elseBlock) {
                     execute(stmt);
                 }
-                return;
             }
         }
+    }
 
-        if (node.elseBlock != null) {
-            for (ASTNode stmt : node.elseBlock) execute(stmt);
+    // ----------------------
+    // Evaluate expressions
+    // ----------------------
+    private Object evaluate(Map<String, Object> node) {
+        String type = (String) node.get("type");
+
+        switch (type) {
+            case "Number":
+                return node.get("value");
+            case "String":
+                return node.get("value");
+            case "Identifier":
+                String name = (String) node.get("name");
+                if (!variables.containsKey(name)) {
+                    throw new RuntimeException("Variable not found: " + name);
+                }
+                return variables.get(name);
+            case "BinaryOp":
+                return evaluateBinaryOp(node);
+            default:
+                throw new RuntimeException("Unknown node type: " + type);
         }
     }
 
-    private boolean evaluateCondition(Condition node) throws Exception {
-        Object left = evaluate(node.left);
-        Object right = evaluate(node.right);
+    private Object evaluateBinaryOp(Map<String, Object> node) {
+    String operator = (String) node.get("operator");
+    Map<String, Object> leftNode = (Map<String, Object>) node.get("left");
+    Map<String, Object> rightNode = (Map<String, Object>) node.get("right");
 
-        int cmp = compare(left, right);
+    double left = toNumber(evaluate(leftNode));
+    double right = toNumber(evaluate(rightNode));
 
-        switch (node.operator) {
-            case "==": return cmp == 0;
-            case "!=": return cmp != 0;
-            case ">": return cmp > 0;
-            case "<": return cmp < 0;
-            case ">=": return cmp >= 0;
-            case "<=": return cmp <= 0;
+    double result;
+
+    switch (operator) {
+        case "+": result = left + right; break;
+        case "-": result = left - right; break;
+        case "*": result = left * right; break;
+        case "/": result = left / right; break;
+        default: throw new RuntimeException("Unknown operator: " + operator);
+    }
+    if (result == (int) result) {
+        return (int) result;
+    }
+    return result;
+}
+
+    private boolean evaluateCondition(Map<String, Object> node) {
+        String operator = (String) node.get("operator");
+        Map<String, Object> leftNode = (Map<String, Object>) node.get("left");
+        Map<String, Object> rightNode = (Map<String, Object>) node.get("right");
+
+        double left = toNumber(evaluate(leftNode));
+        double right = toNumber(evaluate(rightNode));
+
+        switch (operator) {
+            case "==": return left == right;
+            case "!=": return left != right;
+            case ">": return left > right;
+            case "<": return left < right;
+            case ">=": return left >= right;
+            case "<=": return left <= right;
+            default: throw new RuntimeException("Unknown condition operator: " + operator);
         }
-        throw new Exception("Unknown operator: " + node.operator);
     }
 
-    private int compare(Object a, Object b) {
-        if (a instanceof Number && b instanceof Number)
-            return Double.compare(((Number) a).doubleValue(), ((Number) b).doubleValue());
-        return a.toString().compareTo(b.toString());
-    }
-
-    private Object evaluate(ASTNode node) throws Exception {
-        if (node instanceof NumberNode) return ((NumberNode) node).value;
-        if (node instanceof Identifier) return variables.get(((Identifier) node).name);
-        if (node instanceof StringNode) return ((StringNode) node).value;
-        if (node instanceof BinaryOp) return evalBinary((BinaryOp) node);
-
-        throw new Exception("Cannot evaluate " + node.getClass().getName());
-    }
-
-    private Object evalBinary(BinaryOp node) throws Exception {
-        double l = ((Number) evaluate(node.left)).doubleValue();
-        double r = ((Number) evaluate(node.right)).doubleValue();
-
-        switch (node.operator) {
-            case "+": return l + r;
-            case "-": return l - r;
-            case "*": return l * r;
-            case "/": return l / r;
+    private double toNumber(Object value) {
+        if (value instanceof Double) return (Double) value;
+        if (value instanceof String) {
+            try {
+                return Double.parseDouble((String) value);
+            } catch (NumberFormatException e) {
+                throw new RuntimeException("Cannot convert to number: " + value);
+            }
         }
-        throw new Exception("Unknown operator: " + node.operator);
-    }
-
-    public void reset() {
-        variables.clear();
-        varTypes.clear();
-    }
-
-    public Map<String, Object> getVariables() {
-        return new HashMap<>(variables);
+        throw new RuntimeException("Cannot convert to number: " + value);
     }
 }

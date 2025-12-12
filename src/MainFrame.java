@@ -3,7 +3,11 @@
  *
  * @author Pearly Jaleco
  */
-import customlang.LanguageRunner;
+import java.util.List;
+import java.util.Map;
+import customlang.Interpreter;
+import customlang.Parser;
+import customlang.Tokenizer;
 import javax.swing.*;
 import javax.swing.tree.*;
 import javax.swing.undo.UndoManager;
@@ -19,7 +23,7 @@ public class MainFrame extends JFrame {
     private File projectDirectory = new File("project");
     private File currentFile = null;
     private UndoManager undoManager = new UndoManager();
-    private LanguageRunner runner = new LanguageRunner();
+    
     //CONSTRUCTOR 
     public MainFrame() {
         try {
@@ -31,21 +35,7 @@ public class MainFrame extends JFrame {
         setupComponents();
     }
     
-    public class MyIDE implements LanguageRunner.IOCallback {
-    private JTextArea console;
 
-    public MyIDE(JTextArea area) {
-        this.console = area;
-    }
-    @Override
-    public String input(String prompt) {
-        return JOptionPane.showInputDialog(MainFrame.this, prompt);
-    }
-    @Override
-    public void print(String text) {
-        console.append(text + "\n");
-    }
-}
     private void setupComponents() {
         // Setup undo manager
         Document doc = CodeEditorTextArea.getDocument();
@@ -64,9 +54,7 @@ public class MainFrame extends JFrame {
         refreshTree();
         jTree1.setRootVisible(false);
   
-         // Set up the IO callback for the interpreter
-          MyIDE ideIO = new MyIDE(OutputTextArea);
-          runner.setIOCallback(ideIO);
+
     
     // DETECTS WHEN NODE IS SELECTED 
         // Detects when user clicks on a file in the tree node 
@@ -635,23 +623,36 @@ public class MainFrame extends JFrame {
     }//GEN-LAST:event_BtnSETTINGSActionPerformed
 
     private void BtnRUNActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_BtnRUNActionPerformed
-    String sourceCode = CodeEditorTextArea.getText();
-    OutputTextArea.setText(""); 
+         OutputTextArea.setText(""); // Clear output
+    String code = CodeEditorTextArea.getText();
 
-    new Thread(() -> {
-        boolean success = runner.run(sourceCode, text -> {
-            // All output goes to OutputTextArea
-            SwingUtilities.invokeLater(() -> OutputTextArea.append(text + "\n"));
-        });
+    try {
+        // Tokenize and parse
+        Tokenizer tokenizer = new Tokenizer(code);
+        List<String> tokens = tokenizer.tokenize();
 
-        SwingUtilities.invokeLater(() -> {
-            if (success) {
-                OutputTextArea.append("\nExecution completed successfully");
-            } else {
-                OutputTextArea.append("\nError: " + runner.getLastError() + "\n");
+        Parser parser = new Parser(tokens);
+        Map<String, Object> ast = parser.parse();
+
+        // Create Interpreter with the correct IOCallback reference
+        Interpreter interpreter = new Interpreter(new Interpreter.IOCallback() {
+            @Override
+            public void print(String text) {
+                OutputTextArea.append(text + "\n");
+            }
+
+            @Override
+            public String read(String prompt) {
+                return JOptionPane.showInputDialog(MainFrame.this, prompt);
             }
         });
-    }).start();  
+
+        // Run the program
+        interpreter.run(ast);
+
+    } catch (Exception ex) {
+        OutputTextArea.append("Error: " + ex.getMessage() + "\n");
+    }
     }//GEN-LAST:event_BtnRUNActionPerformed
 
     private void NEWFileMenuActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_NEWFileMenuActionPerformed
