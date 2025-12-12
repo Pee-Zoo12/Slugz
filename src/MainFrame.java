@@ -139,6 +139,7 @@ public class MainFrame extends JFrame {
         PopMenuHELP = new javax.swing.JPopupMenu();
         USERGUIDEMenu = new javax.swing.JMenuItem();
         ABOUTMenu = new javax.swing.JMenuItem();
+        SampleProgram = new javax.swing.JMenuItem();
         PopMenuSETTINGS = new javax.swing.JPopupMenu();
         TextColorMenu = new javax.swing.JMenuItem();
         BackgroundColorMenu = new javax.swing.JMenuItem();
@@ -265,6 +266,17 @@ public class MainFrame extends JFrame {
             }
         });
         PopMenuHELP.add(ABOUTMenu);
+
+        SampleProgram.setBackground(new java.awt.Color(188, 166, 134));
+        SampleProgram.setFont(new java.awt.Font("Bookman Old Style", 3, 14)); // NOI18N
+        SampleProgram.setForeground(new java.awt.Color(69, 41, 0));
+        SampleProgram.setText("Sample Program");
+        SampleProgram.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                SampleProgramActionPerformed(evt);
+            }
+        });
+        PopMenuHELP.add(SampleProgram);
 
         TextColorMenu.setBackground(new java.awt.Color(255, 234, 218));
         TextColorMenu.setFont(new java.awt.Font("Bookman Old Style", 3, 14)); // NOI18N
@@ -791,6 +803,20 @@ public class MainFrame extends JFrame {
         // TODO add your handling code here:
     }//GEN-LAST:event_LOGOActionPerformed
 
+    private void SampleProgramActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_SampleProgramActionPerformed
+       SampleProgram guide = new SampleProgram();
+        
+        // This line is CRITICAL: it ensures closing the guide doesn't close your whole app
+        guide.setDefaultCloseOperation(javax.swing.WindowConstants.DISPOSE_ON_CLOSE);
+        
+        // Center the window on screen (optional but looks nice)
+        guide.setLocationRelativeTo(null);
+        
+        // Show it
+        guide.setVisible(true);
+        
+    }//GEN-LAST:event_SampleProgramActionPerformed
+
     /**
      * @param args the command line arguments
      */
@@ -834,6 +860,7 @@ public class MainFrame extends JFrame {
     private javax.swing.JSplitPane RightSplit;
     private javax.swing.JMenuItem SAVEASFileMenu;
     private javax.swing.JMenuItem SAVEFileMenu;
+    private javax.swing.JMenuItem SampleProgram;
     private javax.swing.JPanel SideBarPanel;
     private javax.swing.JMenuItem TextColorMenu;
     private javax.swing.JPanel TopPanel;
