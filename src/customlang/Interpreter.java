@@ -129,7 +129,15 @@ public class Interpreter {
 
         switch (type) {
             case "Number":
-                return node.get("value");
+    Object val = node.get("value");
+    if (val instanceof String) {
+        return Double.parseDouble((String) val); // convert string to number
+    } else if (val instanceof Number) {
+        return ((Number) val).doubleValue(); // handle Integer/Double
+    } else {
+        throw new RuntimeException("Invalid number value: " + val);
+    }
+
             case "String":
                 return node.get("value");
             case "Identifier":
@@ -188,14 +196,16 @@ public class Interpreter {
     }
 
     private double toNumber(Object value) {
-        if (value instanceof Double) return (Double) value;
-        if (value instanceof String) {
-            try {
-                return Double.parseDouble((String) value);
-            } catch (NumberFormatException e) {
-                throw new RuntimeException("Cannot convert to number: " + value);
-            }
-        }
-        throw new RuntimeException("Cannot convert to number: " + value);
+    if (value instanceof Number) {
+        return ((Number) value).doubleValue();
     }
+    if (value instanceof String) {
+        try {
+            return Double.parseDouble(((String) value).trim());
+        } catch (NumberFormatException e) {
+            throw new RuntimeException("Cannot convert to number: " + value);
+        }
+    }
+    throw new RuntimeException("Cannot convert to number: " + value);
+}
 }
