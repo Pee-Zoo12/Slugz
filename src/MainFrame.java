@@ -637,7 +637,6 @@ public class MainFrame extends JFrame {
     private void BtnRUNActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_BtnRUNActionPerformed
     String sourceCode = CodeEditorTextArea.getText();
     OutputTextArea.setText(""); 
-    OutputTextArea.append("Running...\n\n");
 
     new Thread(() -> {
         boolean success = runner.run(sourceCode, text -> {
@@ -647,9 +646,9 @@ public class MainFrame extends JFrame {
 
         SwingUtilities.invokeLater(() -> {
             if (success) {
-                OutputTextArea.append("\n✓ Execution completed successfully\n");
+                OutputTextArea.append("\nExecution completed successfully");
             } else {
-                OutputTextArea.append("\n✗ Error: " + runner.getLastError() + "\n");
+                OutputTextArea.append("\nError: " + runner.getLastError() + "\n");
             }
         });
     }).start();  
